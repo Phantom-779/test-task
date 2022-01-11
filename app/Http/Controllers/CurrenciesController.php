@@ -9,40 +9,46 @@ class CurrenciesController extends Controller
     public function create() {
         $currensies = new Currencies();
 
-        $dataRU = simplexml_load_file('https://cbr.ru/scripts/XML_daily.asp');              // Подключение XML файлов ЦБР
+        $dataRU = simplexml_load_file('https://cbr.ru/scripts/XML_daily.asp');                                           // Подключение XML файлов ЦБР
         $dataEN = simplexml_load_file('http://www.cbr.ru/scripts/XML_daily_eng.asp');
 
-        \DB::table('currencies')->truncate();                                               // Удаление старой информации о валютах
+        Currencies::truncate();                                                                                         // Удаление старой информации о валютах
 
-        for ($i = 0; $i < count($dataRU); $i++){                                            // Загрузка информации о валютах
-            \DB::table('currencies')->insert([
-                'russian_name'      => $dataRU->Valute[$i]->Name,
-                'english_name'      => $dataEN->Valute[$i]->Name,
-                'alphabetic_code'   => $dataRU->Valute[$i]->CharCode,
-                'didgit_code'       => $dataRU->Valute[$i]->NumCode,
-                'rate'              => str_replace(',', '.', $dataRU->Valute[$i]->Value),
-                'created_at'        => date("Y-m-d H:i:s"),
-                'updated_at'        => date("Y-m-d H:i:s")
-            ]);   
-        }
+
+        foreach ($dataRU->Valute as $Valut){                                                                             // Загрузка информации о валютах
+            $pr = $Valut->attributes()->ID;     //получение id используемой валюты
+            $CurID = $dataEN->xpath("//Valute[@ID = '$pr']");   //получение валюты по id из английского xml файла
+            $currensiesArr[] = [
+                    'id'                => $Valut->attributes()->ID,
+                    'name'              => $Valut->Name,
+                    'english_name'      => $CurID[0]->Name,
+                    'alphabetic_code'   => $Valut->CharCode,
+                    'didgit_code'       => $Valut->NumCode,
+                    'rate'              => bcdiv(str_replace(',', '.', $Valut->Value), str_replace(',', '.', $Valut->Nominal), 6)
+                ];
+            }
+        Currencies::insert($currensiesArr);
     }
 
-    public function Get_currency() {                                                        // метод возвращает информацию о валюте в формате json
-        $allCurrency = \DB::table('currencies')->get();
-        return json_encode($allCurrency, JSON_UNESCAPED_UNICODE);
+    public function Get_currency() {
+        try{
+            $allCurrency = Currencies::all();
+        } catch(\Exception $e){
+            echo "Ошибка подключения к базе данных";
+        }                                                                                   // метод возвращает информацию о валюте в формате json
+        $headers = [ 'Content-Type' => 'application/json; charset=utf-8' ];
+        return response()->json($allCurrency, 200, $headers, JSON_UNESCAPED_UNICODE);
     }
 
-    public function Get_currency_byID($id) {                                                // метод возвращает информацию о валюте в формате json
-        $Currency = \DB::table('currencies')->where('id', $id)->first();
-        return json_encode($Currency, JSON_UNESCAPED_UNICODE);
+    public function Get_currency_byID($id) { 
+        try{
+            $Currency = Currencies::where('id', $id)->first();
+        }  catch(\Exception $e){
+            echo "Ошибка подключения к базе данных";
+        }                                                                         // метод возвращает информацию о валюте в формате json
+        $headers = [ 'Content-Type' => 'application/json; charset=utf-8' ];
+        return response()->json($Currency, 200, $headers, JSON_UNESCAPED_UNICODE); 
     }
-
-    public function test_metod() {                                                          // тестовый метод для проверки команд
-        //$testcick = Self::Get_currency_byID(4);
-        $testcick = Self::Get_currency();
-        echo $testcick;
-    }
-
 }
 
 
